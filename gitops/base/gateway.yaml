@@ -1,0 +1,73 @@
+# Gateway configuration for Kubernetes cluster
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: appgw-gateway
+  namespace: todo-app
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  gatewayClassName: nginx
+  listeners:
+    - name: http
+      port: 80
+      protocol: HTTP
+      hostname: "cloudbasics.info"
+    - name: https
+      port: 443
+      protocol: HTTPS
+      hostname: "cloudbasics.info"
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - name: tls-secret
+            kind: Secret
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: http-redirect
+  namespace: todo-app
+spec:
+  parentRefs:
+    - name: appgw-gateway
+      sectionName: http
+
+  hostnames:
+    - cloudbasics.info
+
+  rules:
+    - filters:
+        - type: RequestRedirect
+          requestRedirect:
+            scheme: https
+            statusCode: 301
+---
+
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: app-route
+  namespace: todo-app
+spec:
+  parentRefs:
+    - name: appgw-gateway
+      sectionName: https
+  hostnames:
+    - "cloudbasics.info"
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /api 
+      backendRefs:
+        - name: backend-svc
+          port: 8000
+
+    - matches:
+        - path:
+            type: PathPrefix
+            value: / 
+      backendRefs:
+        - name: frontend-svc
+          port: 80
